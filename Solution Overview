@@ -24,3 +24,27 @@
 
     > Cosmos DB’s cost scales with RU/s and data size — both of which will decrease after archival.
 
+
+GitHub Repo Structure:
+
+
+azure-billing-archiver/
+│
+├── BillingArchiver/
+│   ├── __init__.py                  # Durable Functions orchestrator
+│   ├── get_old_records.py          # Activity: Query old records
+│   ├── archive_to_blob.py          # Activity: Upload to Blob
+│   ├── delete_from_cosmos.py       # Activity: Delete from Cosmos DB
+│   └── function.json               # Timer trigger binding
+│
+├── host.json                       # Azure Functions host config
+├── local.settings.json            # Local dev settings
+├── requirements.txt               # Python dependencies
+├── README.md                      # Project documentation
+│
+└── terraform/
+    ├── main.tf                    # Infra: Function app, blob, storage
+    ├── variables.tf
+    └── outputs.tf
+
+
