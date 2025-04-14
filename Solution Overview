@@ -1,0 +1,26 @@
+🧩 Solution Overview
+
+
+1. Primary Data Store: Continue using Cosmos DB for active billing records (≤ 3 months old).
+
+2. Archival Store: Move older records to Azure Blob Storage (JSON or Avro format) in a structured folder layout (e.g., by month/year).
+
+3. Data Access Abstraction Layer:
+
+    > Introduce an Azure Function proxy (or logic inside your API backend) that checks Cosmos DB first, then blob storage if not found.
+
+    > This maintains API contract compatibility.
+
+4. Automated Archival:
+
+    > Use Azure Data Factory, Durable Functions, or Logic Apps to periodically move old records to Blob Storage.
+
+    > After successful archival, delete from Cosmos DB.
+
+
+
+💰 Why This Saves Costs:
+    > Azure Blob Storage (especially Cool or Archive tiers) is dramatically cheaper than Cosmos DB for storing infrequently accessed data.
+
+    > Cosmos DB’s cost scales with RU/s and data size — both of which will decrease after archival.
+
