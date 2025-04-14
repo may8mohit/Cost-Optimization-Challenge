@@ -1,4 +1,4 @@
-# Solution Overview
+# **Solution Overview**
 
 
 1. Primary Data Store: Continue using Cosmos DB for active billing records (≤ 3 months old).
