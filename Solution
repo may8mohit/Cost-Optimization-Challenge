@@ -1,0 +1,31 @@
+Here's a deployable solution in two parts:
+
+
+Part 1: 
+
+Durable Functions-Based Archival System
+
+This solution uses:
+
+  > Azure Durable Functions (Python) for orchestration
+
+  > Blob Storage as archive
+
+  > Cosmos DB SDK for record operations
+
+
+Requirements: 
+Install the following in your environment (Bash Command):
+pip install azure-functions azure-storage-blob azure-cosmos
+
+Durable Function Structure
+
+
+BillingArchival/
+│
+├── __init__.py               # Entry point for orchestration
+├── get_old_records.py        # Gets old records from Cosmos DB
+├── archive_to_blob.py        # Uploads record to Blob
+├── delete_from_cosmos.py     # Deletes record from Cosmos DB
+└── host.json                 # Azure Functions config
+
