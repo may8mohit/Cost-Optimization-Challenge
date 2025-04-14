@@ -1,0 +1,4 @@
+azure-functions
+azure-durable-functions
+azure-cosmos
+azure-storage-blob
