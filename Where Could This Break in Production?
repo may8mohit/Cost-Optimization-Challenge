@@ -1,0 +1,308 @@
+
+
+🚨 Where Could This Break in Production?
+
+1. Data Integrity Issues: Partial Archival
+Risk: A record gets uploaded to blob but fails to delete from Cosmos DB — or vice versa.
+
+Impact: Duplicate reads, stale data, incorrect billing analytics.
+
+Mitigation & Fix:
+
+Transactional Semantics: Implement a checkpoint flag or status in the record (archived: true/false) instead of immediately deleting.
+
+Only delete in a second “cleaner” job once the blob version has been confirmed.
+
+Add checksums (e.g., MD5 hash comparison) between Cosmos and Blob versions.
+
+json
+Copy
+Edit
+{
+  "archived": true,
+  "blobPath": "year=2024/month=12/rec123.json",
+  "checksum": "ae34fdd..."
+}
+
+
+2. Blob Read Failures
+Risk: Blob Storage might be throttled or temporarily unavailable.
+
+Impact: Archived records become inaccessible.
+
+Mitigation & Fix:
+
+Retry logic with exponential backoff when fetching from blob.
+
+Set Azure CDN or Azure Front Door in front of Blob Storage to cache archived data.
+
+Optionally cache frequently accessed archived records in Redis.
+
+python
+Copy
+Edit
+for i in range(3):
+    try:
+        return download_blob(...)
+    except Exception:
+        time.sleep(2 ** i)
+
+
+3. Durable Function Timeouts or Failures
+Risk: Orchestration takes too long (e.g., 1,000s of records), causing timeouts.
+
+Impact: Orphaned records or incomplete runs.
+
+Mitigation & Fix:
+
+Implement batching (e.g., 100 records per sub-orchestration).
+
+Use Durable Fan-Out/Fan-In pattern: parallel archival of record batches.
+
+Persist logs in Application Insights to resume incomplete runs.
+
+
+
+4. Blob Storage Organization Chaos
+Risk: Over time, the folder structure becomes too deep or inconsistent.
+
+Impact: Increased latency when searching for archived records.
+
+Mitigation & Fix:
+
+Enforce a strict naming scheme (e.g., billing-archive/year=YYYY/month=MM/recordID.json)
+
+Optionally maintain a lightweight metadata index in Cosmos or Azure Table Storage to map recordID → blob path.
+
+
+
+5. Schema Drift Between Cosmos and Blob
+Risk: Your system evolves and the schema of billing records changes over time.
+
+Impact: Consumers may get unexpected data formats from archived records.
+
+Mitigation & Fix:
+
+Save records in blob with versioned schema wrappers:
+
+json
+Copy
+Edit
+{
+  "schemaVersion": "v1.2",
+  "data": { ... }
+}
+Keep schema-aware readers that can deserialize old formats or upgrade archived records.
+
+
+6. Permissions and Secrets Misconfiguration
+Risk: A secret rotation or RBAC change causes failures in reading/writing.
+
+Impact: Function fails silently or logs sensitive errors.
+
+Mitigation & Fix:
+
+Use Managed Identity instead of connection strings.
+
+Set up Azure Monitor alerts for failed function runs or 403/401 errors on storage access.
+
+Regularly test disaster scenarios (simulate key revocation).
+
+
+
+7. Data Loss Due to Blob Lifecycle Policies
+Risk: Blob Storage lifecycle rules might delete old records unintentionally.
+
+Impact: Permanent data loss.
+
+Mitigation & Fix:
+
+DO NOT enable auto-delete lifecycle rules unless explicitly required.
+
+Set immutability policies or configure blob soft delete and versioning to recover from mistakes.
+
+
+
+8. Failure to Scale Under Load
+Risk: A surge in billing records (e.g., end of month/year) causes function throttling or blob congestion.
+
+Impact: Missed or delayed archival, throttled APIs.
+
+Mitigation & Fix:
+
+Set Cosmos DB throughput to autoscale mode.
+
+Use premium tier storage accounts for faster blob I/O.
+
+Scale out Durable Functions via Elastic Premium Plan or Consumption Plan with concurrency tuning.
+
+
+
+9. Loss of Observability
+Risk: You can’t trace what happened in case of failure.
+
+Impact: Difficult debugging, slow MTTR (mean time to recovery).
+
+Mitigation & Fix:
+
+Integrate Application Insights for:
+
+Durable Function execution flow
+
+Custom telemetry: records processed, failed, retried
+
+Latency between Cosmos and Blob
+
+Expose a metrics dashboard via Azure Monitor Workbook or Grafana.
+
+🧰 Production Hardening Checklist
+Area	Best Practice	Tool
+Observability	Logs, metrics, alerts	App Insights, Azure Monitor
+Resilience	Retry logic, fan-out/in	Durable Functions patterns
+Data Protection	No delete before verify	Staging flags, checksums
+Schema Control	Versioning & converters	JSON schema wrappers
+Security	Managed Identity	Key Vault, RBAC
+Scalability	Batch processing, autoscaling	Azure Consumption Plan, queues
+Testing	Canary and chaos testing	Feature flags, test blob storage
+Docs	Diagrams, playbooks, READMEs	GitHub, Confluence
+Would you like a playbook for incident response or runbooks for day-2 ops like reprocessing failures, rotating keys, etc.?
+
+
+
+📘 Incident Response Playbook
+This outlines how to respond when things go wrong, from alert to resolution, with defined owners and actions.
+
+🆘 1. Incident Types & Severity
+Severity	Example	Response Time	Owner
+SEV-1	Archived data is inaccessible to users	15 mins	DevOps + Backend
+SEV-2	Archival function failed for >12h	1 hour	DevOps
+SEV-3	Missing individual records or slow archival	4 hours	Support Tier 2
+
+
+🔔 2. Alerting Rules (Azure Monitor / App Insights)
+Metric	Alert When	Action
+Function App failures	≥ 5 failures in 10 min	Auto-open SEV-2
+Blob read latency	> 3s p95	Check blob health or CDN fallback
+Missing daily archival log	Expected log not found	Trigger SEV-3
+Cosmos RU/s saturation	> 80% for 10 min	Scale or analyze hot partitions
+
+
+🧰 3. First Response Actions
+Checklist for On-Call Engineer:
+
+✅ Acknowledge and classify severity.
+
+✅ Check logs in Application Insights.
+
+✅ Identify failing components: Cosmos, Blob, Function, Network.
+
+✅ Restart durable function or retry sub-orchestration if stuck.
+
+✅ Trigger manual archival via script if needed.
+
+
+🧑‍💻 4. Communication Plan
+Internal Slack: #billing-archiver-ops
+
+Postmortem Template:
+
+yaml
+Copy
+Edit
+Summary:
+Timeline:
+Root Cause:
+Mitigations:
+Follow-Up Items:
+
+🧾 Day-2 Runbooks
+These help with routine operational tasks and recovery procedures.
+
+🔄 Runbook: Reprocessing Failed Archivals
+Goal: Retry records that failed to archive or delete.
+
+Steps:
+Query Cosmos for records where archived: false and timestamp < now() - 90d
+
+Re-invoke Durable Function manually for those records
+
+Azure CLI Example:
+
+bash
+Copy
+Edit
+az functionapp invoke \
+  --name billing-archival-fn \
+  --resource-group billing-archival-rg \
+  --function-name ReprocessArchive \
+  --body '{ "forceRetry": true }'
+
+
+🔐 Runbook: Rotating Secrets / Credentials
+Goal: Safely rotate secrets or keys for Cosmos DB / Blob Storage.
+
+Steps:
+Rotate in Azure Portal or via Key Vault.
+
+Update Azure Function app settings:
+
+bash
+Copy
+Edit
+az functionapp config appsettings set \
+  --name billing-archival-fn \
+  --resource-group billing-archival-rg \
+  --settings "COSMOS_DB_KEY=<new_key>" "BLOB_CONN_STR=<new_conn>"
+
+Restart function app to apply changes.
+
+Validate with test archival and blob read.
+
+🧪 Runbook: Testing Disaster Recovery
+
+Goal: Validate that archived records can be recovered and read.
+
+Monthly DR Drill:
+Select random month/year blob prefix
+
+Download 10 records
+
+Validate structure and readability
+
+Confirm associated Cosmos records are deleted or marked as archived
+
+🧹 Runbook: Cleaning Orphaned Records
+
+Goal: Identify records that exist in both Cosmos and Blob.
+
+Strategy:
+Use a metadata index (if used) or map based on recordID
+
+Flag duplicates
+
+Delete Cosmos copy if blob is valid and checksum matches
+
+📤 Runbook: Manual Archival (Hotfix)
+Goal: Archive a specific set of records ad hoc.
+
+python
+Copy
+Edit
+python archive_manual.py --from 2023-12-01 --to 2023-12-31
+This script can:
+
+Fetch records from Cosmos
+
+Archive to blob
+
+Validate & delete
+
+Log to App Insights or send Slack webhook
+
+🛡️ Bonus: Resilience Play Suggestions
+Set up Azure Chaos Studio to simulate storage/network failures
+
+Implement feature flags to route reads to blob fallback
+
+Use Function App slots to test new archival logic without affecting live runs
+
