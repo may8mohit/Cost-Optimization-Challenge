@@ -48,3 +48,15 @@ azure-billing-archiver/
     └── outputs.tf
 
 
+✅ Final Notes
+
+    > Zero downtime: Run in background; Cosmos is live.
+
+    > Data integrity: Don’t delete unless upload to Blob succeeds.
+
+    > No API change: Read logic checks Cosmos → Blob fallback.
+
+    > Simplicity: Durable Function orchestrates entire process.
+
+    > Bonus: Add telemetry using App Insights for logs and alerts.
+
