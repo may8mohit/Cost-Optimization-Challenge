@@ -165,7 +165,7 @@ Security	Managed Identity	Key Vault, RBAC
 Scalability	Batch processing, autoscaling	Azure Consumption Plan, queues
 Testing	Canary and chaos testing	Feature flags, test blob storage
 Docs	Diagrams, playbooks, READMEs	GitHub, Confluence
-Would you like a playbook for incident response or runbooks for day-2 ops like reprocessing failures, rotating keys, etc.?
+
 
 
 
